@@ -1,0 +1,10 @@
+<title>Banned|Blacklist Admin</title>
+{% for item in Banneds %}
+    <p>コード:{{ item.Code }}</p>
+    <p>追加者名:{{ item.Added_by }}</p>
+    <p>理由コード:{{ item.ReasonCode }}{{ item._id }}{% if item.Legacy %}_LG{% endif %} </p>
+    <p>理由タイトル:{{ item.ReasonTitle }}</p>
+    <p>理由詳細:{{ item.ReasonDescription }}</p>
+    <p>データタイプ:{{ item.dataType }}</p>
+<hr>
+{% endfor %}

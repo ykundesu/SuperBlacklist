@@ -1,7 +1,11 @@
-from fastapi import FastAPI, BackgroundTasks, HTTPException, Request
-from fastapi.responses import PlainTextResponse, JSONResponse
+from fastapi import FastAPI, BackgroundTasks, HTTPException, Request, Cookie, Response, Body
+from fastapi.background import P
+from fastapi.responses import PlainTextResponse, JSONResponse, RedirectResponse
+from fastapi.templating import Jinja2Templates
 import hashlib
 import httpx
+from pymongo.collection import Collection
+from pymongo.database import Database
 from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
 from bson.objectid import ObjectId
@@ -9,6 +13,8 @@ import asyncio
 from concurrent.futures import ThreadPoolExecutor
 import os
 import json
+
+from starlette.responses import HTMLResponse
 
 DATABASE_host = os.environ.get("BLACKLIST_DATABASE_host")
 DATABASE_port = int(os.environ.get("BLACKLIST_DATABASE_port"))
@@ -21,19 +27,23 @@ cf_zone = os.environ.get("BLACKLIST_CLOUDFLARE_ZONE")
 Blacklist_APIBase: str = "https://blacklist.supernewroles.com/api/"
 
 client = None
-BlacklistBase = None
-BlacklistBanned = None
-BlacklistPass = None
+BlacklistBase: Database = None
+BlacklistBanned: Collection = None
+BlacklistPass: Collection = None
+
+templates = Jinja2Templates(directory="templates")
 
 def initdatabase():
     global client
     global BlacklistBase
     global BlacklistBanned
+    global BlacklistPass
     client = MongoClient(host=DATABASE_host, port=DATABASE_port,
                          username = DATABASE_username,
                          password = DATABASE_password)
     BlacklistBase = client["Blacklist"]
     BlacklistBanned = BlacklistBase["Banned"]
+    BlacklistPass = BlacklistBase["AdminUser"]
     print("authed MongoDB")
 initdatabase()
 
@@ -54,6 +64,21 @@ async def get_hash():
     blackdetail = f"{json.dumps(blockedPlayers)},{json.dumps(blockedPlayersPUID)}"
     hashcode: str = await tohash(blackdetail)
     return PlainTextResponse(hashcode)
+@app.get("/admin/list")
+async def admin_list(request: Request, password: str | None = Cookie(default=None)):
+    if password == None or BlacklistPass.find_one({"password": password}):
+        return RedirectResponse("/admin/login")
+    context = {"Banneds": list(BlacklistBanned.find()), "request": request}
+    return templates.TemplateResponse("list.html", context)
+@app.get("/admin/login")
+async def admin_login(request: Request):
+    return templates.TemplateResponse("login.html", {"request": request})
+@app.post("/admin/login")
+async def admin_login_post(password: str = Body()):
+    password = password[9:]
+    if BlacklistPass.find_one({"password": password}):
+        return RedirectResponse("/admin/list", status_code=302, headers={"Set-Cookie": f"password={password}"})
+    return RedirectResponse("/admin/login", status_code=302)
 async def tohash(text):
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(POOL, tohash_sync, text)
