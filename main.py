@@ -1,5 +1,5 @@
 from fastapi import FastAPI, BackgroundTasks, HTTPException, Request
-from fastapi.responses import PlainTextResponse, FileResponse
+from fastapi.responses import PlainTextResponse
 import hashlib
 import httpx
 from pymongo.mongo_client import MongoClient
@@ -48,7 +48,7 @@ async def get_list():
 async def get_hash():
     (blockedPlayers, blockedPlayersPUID) = await getblockedplayers()
     hashcode: str = await tohash(f"{blockedPlayers},{blockedPlayersPUID}")
-    return {"code":-1,"hash":hashcode}
+    return PlainTextResponse(hashcode)
 async def tohash(text):
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(POOL, tohash_sync, text)
