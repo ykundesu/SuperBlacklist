@@ -1,5 +1,5 @@
 from fastapi import FastAPI, BackgroundTasks, HTTPException, Request
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import PlainTextResponse, JSONResponse
 import hashlib
 import httpx
 from pymongo.mongo_client import MongoClient
@@ -8,6 +8,7 @@ from bson.objectid import ObjectId
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 import os
+import json
 
 DATABASE_host = os.environ.get("BLACKLIST_DATABASE_host")
 DATABASE_port = int(os.environ.get("BLACKLIST_DATABASE_port"))
@@ -40,14 +41,18 @@ POOL = ThreadPoolExecutor()
 
 app = FastAPI()
 @app.get("/api/get_list")
-async def get_list():
+async def get_list(isNew: str = None):
     (blockedPlayers, blockedPlayersPUID) = await getblockedplayers()
-    hashcode: str = await tohash(f"{blockedPlayers},{blockedPlayersPUID}")
-    return {"code":-1,"hash":hashcode,"blockedPlayers":blockedPlayers,"blockedPlayersPUID":blockedPlayersPUID}
+    blackdetail = f"{json.dumps(blockedPlayers)},{json.dumps(blockedPlayersPUID)}"
+    hashcode: str = await tohash(blackdetail)
+    if isNew:
+        return {"code":-1,"hash":hashcode,"blackData":blackdetail}
+    return PlainTextResponse(json.dumps({"code":-1,"hash":hashcode,"blockedPlayers":blockedPlayers,"blockedPlayersPUID":blockedPlayersPUID}), headers={"content-type":"application/json"})
 @app.get("/api/get_hash")
 async def get_hash():
     (blockedPlayers, blockedPlayersPUID) = await getblockedplayers()
-    hashcode: str = await tohash(f"{blockedPlayers},{blockedPlayersPUID}")
+    blackdetail = f"{json.dumps(blockedPlayers)},{json.dumps(blockedPlayersPUID)}"
+    hashcode: str = await tohash(blackdetail)
     return PlainTextResponse(hashcode)
 async def tohash(text):
     loop = asyncio.get_event_loop()
@@ -58,6 +63,7 @@ async def parge_cdn_cache():
     headers = {'Authorization': 'Bearer '+cf_token,"Content-Type": "application/json"}
     request_data={"files":[Blacklist_APIBase+"get_list", 
                            Blacklist_APIBase+"get_list?hash=true",
+                           Blacklist_APIBase+"get_list?isNew=a",
                            Blacklist_APIBase+"get_hash"
                            ]}
     async with httpx.AsyncClient() as client:
